@@ -239,7 +239,10 @@ class Expander():
         for w in sorted(term_freq, key=term_freq.get, reverse=True):
             sorted_terms.append(w)
         
-        for i in range(count):
+        for i in range(len(sorted_terms)):
+	    if i > count:
+                ## We are just interested in the top ${count} changes
+		break
             try:
                 ##result=str(results[i][0])
                 result = sorted_terms[i]
@@ -266,13 +269,16 @@ class Expander():
                 try:
                     s=self.search_expand(q)
                     time.sleep(2)
+		    break ## got a result, we are done
                 except xml.parsers.expat.ExpatError:
                     print "Error returned from Google ... retrying"
-                    raise
+		    if i >= 4:
+	                ## Ok, of Google bombs out four times then
+			## re-throw the exception, this will kill the
+		        ## program
+		        raise
                     time.sleep(20)
                     continue
-                else:
-                    break
             ## We didn't get anything, go to the next term
             if not s:
                 continue
@@ -293,7 +299,10 @@ class Expander():
                                ORDER BY termcount DESC"""
                             % (term+'%'))
         results=self.cursor.fetchall()
-        for i in range(count):
+        for i in range(len(results)):
+	    if i > count:
+		## We are just interested in the top ${count} results
+                break
             try:
                 result=str(results[i][0])
                 #print "RESULT: %s" % result
@@ -351,14 +360,14 @@ class Expander():
         self.connection is for NGram Corpus on Cassandra
         self.connection2 is for UMLS on SQLServer 2008
         """
-        ##self.connection = pyodbc.connect('DRIVER={SQL Server};Trusted_Connection=yes;SERVER=WIN-20IR78KE8UV\SQLSERVER2012;DATABASE=GoogleCorpus;UID=XXXXXXXXX')
+        ##self.connection = pyodbc.connect('DRIVER={SQL Server};Trusted_Connection=yes;SERVER=WIN-20IR78KE8UV\SQLSERVER2012;DATABASE=GoogleCorpus;UID=XXXXXXXXXX')
         ##self.cursor = self.connection.cursor()
         ## This is the cassandra database with the 4-gram Google Web Corpus
         
         self.connection = cql.connect('127.0.0.1', 9160, "fourgm", cql_version = '3.0.0')
         self.cursor = self.connection.cursor()
 
-        self.connection2 = pyodbc.connect('DRIVER={SQL Server};SERVER=134.173.236.21;DATABASE=umlsSmall;UID=XXXXXXX;PWD=XXXXXX')
+        self.connection2 = pyodbc.connect('DRIVER={SQL Server};SERVER=134.173.236.21;DATABASE=XXXXXX;UID=XXXXXXX;PWD=XXXXXXXX')
         self.cursor2=self.connection2.cursor()
 
     def write_to_file(self,filename,data):
@@ -404,7 +413,7 @@ def main():
     print "Data Directory %s" % datadirectory
     data=[]
     newfile="./%s/new_200k.csv" % datadirectory # File to be written to
-    filename="./%s/sampled3.txt" % datadirectory # File to be read
+    filename="./%s/sampled3_continue.txt" % datadirectory # File to be read
     print "begin"
     expander=Expander(filename)
     expander.connect()
@@ -429,7 +438,7 @@ def main():
             print "%s doesn't appear to be a three gram search" % term
         except:
             ## Print out the problem term to aid troubleshooting
-            print "Unable to expand term %s" % term
+            print "Unable to Cassandra expand term %s" % term
             ## Hmm, something unexpected happened. Re-raised the error and kill the
             ## program so that we can find and fix the problem.
             raise
