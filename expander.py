@@ -4,6 +4,7 @@ import time
 import pyodbc
 import datetime
 import xml.parsers.expat
+import urllib
 
 from xml.dom import minidom
 from urllib import urlopen
@@ -36,6 +37,21 @@ import cql
 class NotThreeGram(Exception):
     """ A custom Exception class that is thrown when the parser encounters a search
         query that is not 3 grams long
+    """
+    pass
+class NotTwoGram(Exception):
+    """ A custom Exception class that is thrown when the parser encounters a search
+        query that is not 2 grams long
+    """
+    pass
+class UnsupportedNGram(Exception):
+    """ A custom Exception class that is throw when the parser encounters a query 
+        that is the wrong length
+    """
+    pass
+class WrongGramSize(Exception):
+    """ A custom exception class that the Expander class will throw when it is configured
+        for a certain gram size and then receives a query that is not the correct size.
     """
     pass
 class GoogleExpansionFailure(Exception):
@@ -103,87 +119,198 @@ class Expander():
 
     Skip to main() to edit input and output filenames and directories.
     """
-    def __init__(self,filename):
+    def __init__(self,filename,num_grams):
+        ## Right now the code is only written to support 2 gram 
+        ## or 3 gram queries. Other than that it will throw an
+        ## error.
+        if num_grams != 2 and num_grams != 3:
+            raise UnsupportedNGram()
+
         self.start=datetime.datetime.now()
-        opened=open(filename,'rb')
-        reader=csv.reader(opened)
+        self.match_spaces = re.compile(r'\s{2,}')	
         self.terms=[]
         self.total_count=0
         self.pos = PartOfSpeech()
+        self.num_grams = num_grams
+        self.load_file(filename)
+
+    def get_cassandra_expansion_query(self):
+        """ This function returns the cassandra query needed to get a corpus
+            expansion for a given size of query.
+            It will throw an UnsupportedNGram error if it is asked to return
+            a query for a size of search that it does not support.
+        """
+        
+        ## This is some UGLY code
+        query = ''
+        if self.num_grams == 2:
+            query = """
+            select gramthree, frequency from fourgm.threegram_lower where gramone = :gramone and gramtwo = :gramtwo
+            """
+        elif self.num_grams == 3:
+            query = """
+            select gramfour, frequency from fourgm.fourgram_lower where gramone = :gramone and gramtwo = :gramtwo and gramthree = :gramthree
+            """
+        else:
+            raise UnsupportedNGram()
+        return query
+
+    def get_cassandra_bind_variables(self,term_list):
+        if len(term_list) != self.num_grams:
+            raise WrongGramSize()
+        if self.num_grams == 2:
+            return {"gramone":term_list[0], "gramtwo":term_list[1]}
+        elif self.num_grams == 3:
+            return {"gramone":term_list[0], "gramtwo":term_list[1], "gramthree":term_list[2]}
+        else:
+            raise UnsupportedNGram()
+
+
+
+
+    def load_file(self,filename):
+        ## Load the file into the terms list
+        opened=open(filename,'rb')
+        reader=csv.reader(opened)
+
         for term in reader:
             self.terms.append(term[0])
-        
+
+        if len(self.terms) == 0:
+            raise RuntimeError, "No terms were loaded from %s" % filename
+
+
+    def verify_search_length(self,term):
+        """ Verify that our search string has the right number of terms
+        """
+        term_list = self.term_to_list(term)
+        if len(term_list) != self.num_grams:
+            raise WrongGramSize("Expander Object configured for %s gram search terms but '%s' is a %s gram search term." % (self.num_grams, term, len(term_list)))
+        return True
+
+    def term_to_list(self,term):
+        """ Convent a search query into a list of terms. Go ahead and 
+            trim off any whitespace characters and collapse multiple white
+            space characters between terms while we are at it
+        """
+        ##term_list = split(strip(self.match_spaces.sub(' ',term)))
+        term_list = self.match_spaces.sub(' ',term).strip().split()
+        return term_list
+
+    def encode_url_with_query(self,term):
+        ##url="http://clients1.google.com/complete/search?hl=en&output=toolbar&q="
+        urlbase = "http://clients1.google.com/complete/search?"
+        arguments = {'h1':'en', 'output':'toolbar', 'q':term}
+        url = urlbase + urllib.urlencode(arguments)
+        return url
+
     def search_expand(self,term):
         """Uses minidom to parse XML returned by Google search.
         Returns suggested terms (Up to 10, I think)
         """
         print "Search Expanding %s" % term
-        term_words=[]
-        new_terms=[]
-        url="http://clients1.google.com/complete/search?hl=en&output=toolbar&q="
-        space="%27"
         pattern=re.compile('(\w*)\s*')
         matches=pattern.findall(term)
-        count=0
-        for found in matches:
-            if len(found) > 0:
-                term_words.append(found)
-        if len(term_words)==3:
-            for t in term_words:
-                if count<2:
-                    url=url+t+space
-                    count+=1
-                else:
-                    url=url+t
-            ## Content comes in with charset ISO-8859-1, need to
-            ## encode that to unicode or the minidom parser will fail
-            ## at the first non-ascii character
 
-            ## First figure out what character set we were sent by Google
-            req = urlopen(url)
-            encoding=req.headers['content-type'].split('charset=')[-1]
+        ## Make sure it is the right length
+        self.verify_search_length(term)
 
-            ## This does the encoding
-            google_result = unicode(req.read(), encoding)
+        term_words=self.term_to_list(term)
+        new_terms=[]
+        url = self.encode_url_with_query(term)
 
-            ## Now Parse, note you must .encode() because minidom doesn't like
-            ## the raw UTF-8 bit stream
-            dom = minidom.parseString(google_result.encode('utf-8'))
-            suggestions=dom.getElementsByTagName('suggestion')
-            for sug in suggestions:
-                matches=pattern.findall(sug.getAttribute('data'))
-                for found in matches:
-                    if found not in term_words and len(found) > 0:
-                        newt=str(found)
-                        
-                        amb=self.get_ambiguity(newt)
-                        spe=self.get_specificity(newt)
-                        new_terms.append({newt.lower():{'type':'s','amb':amb,'spe':spe,'term':term}})
+        ## Content comes in with charset ISO-8859-1, need to
+        ## encode that to unicode or the minidom parser will fail
+        ## at the first non-ascii character
+
+        ## First figure out what character set we were sent by Google
+        req = urlopen(url)
+        encoding=req.headers['content-type'].split('charset=')[-1]
+
+        ## This does the encoding
+        google_result = unicode(req.read(), encoding)
+
+        ## Now Parse, note you must .encode() because minidom doesn't like
+        ## the raw UTF-8 bit stream
+        dom = minidom.parseString(google_result.encode('utf-8'))
+        suggestions=dom.getElementsByTagName('suggestion')
+        already_found = []
+        for sug in suggestions:
+            matches=pattern.findall(sug.getAttribute('data'))
+            for found in matches:
+                if found not in term_words and len(found) > 0 and found not in already_found:
+                    newt=str(found)
+                    already_found.append(newt)
+                    
+                    amb=self.get_ambiguity(newt)
+                    spe=self.get_specificity(newt)
+                    new_terms.append({newt.lower():{'type':'s','amb':amb,'spe':spe,'term':term}})
 
         return self.insert_data(new_terms,term,"search")
 
+    def get_write_table_name(self,expansion_type):
+        prefix = ''
+        if self.num_grams == 2:
+            prefix = 'threegram'
+        elif self.num_grams == 3:
+            prefix = 'fourgram'
+        else:
+            raise UnsupportedNGram
+        table_type = ''
+        if expansion_type == 's':
+            table_type = 'search'
+        elif expansion_type == 'c':
+            table_type = 'corpus'
+        else:
+            raise RuntimeError("Unknown Expansion Type %s" % expansion_type)
+
+        return "%s_%s_expansion" % (prefix, table_type)
+            
+    def get_write_query(self,expansion_type):
+        ## get the table name, varies according to the expansion type
+        table_name = self.get_write_table_name(expansion_type)
+        bind_base = ':gramone'
+        col_base = 'gramone'
+        if self.num_grams >= 2:
+            col_base = "%s, gramtwo" % col_base
+            bind_base = "%s, :gramtwo" % bind_base
+        if self.num_grams >= 3:
+            col_base = "%s, gramthree" % col_base
+            bind_base = "%s, :gramthree" % bind_base
+        if self.num_grams >= 4:
+            raise UnsupportedNGram()
+
+        query = """
+	    insert into fourgm.%s (%s, expansion, specificity, ambiguity, pos)
+	    values (%s, :expansion, :specificity, :ambiguity, :pos)
+            """ % (table_name, col_base, bind_base)
+        return query
+
+    def get_write_bind_variables(self,terms,expansion_term,spec,amb,pos):
+        ## This will give us the base, a dictionary with the grams encoded
+        base = self.get_cassandra_bind_variables(terms)
+
+        ## Now we build the rest by hand
+        r = {"expansion":expansion_term, "specificity":spec, "ambiguity":amb, "pos":pos}
+
+        ## Now put it together and throw it back
+        return dict(base.items() + r.items())
+
+
     def write_results_to_cassandra(self,dic):
         for word_key in dic.keys():
+            ## hmm, use objects much?
             terms = dic[word_key]['term'].split()
             etype = dic[word_key]['type']
             ambiguity = dic[word_key]['amb']
             specificity = dic[word_key]['spe']
             row=[word_key,dic[word_key]['type'],dic[word_key]['amb'],dic[word_key]['spe'],dic[word_key]['term']]
             pos = self.pos.getPOS(word_key)
-            
-            table_name = None
-            if (etype == 's'):
-                table_name = 'fourgram_search_expansion'
-            elif (etype == 'c'):
-                table_name = 'fourgram_corpus_expansion'
-            else:
-                print "Unknown exansion type %s for term %s" % (term, etype)
-                raise UnknownExpansionType()
-            query = """
-	    insert into fourgm.%s (gramone, gramtwo, gramthree, expansion, specificity, ambiguity, pos)
-	    values (:gramone, :gramtwo, :gramthree, :expansion, :specificity, :ambiguity, :pos)
-            """ % (table_name)
-            values = {"gramone":terms[0], "gramtwo":terms[1], "gramthree":terms[2], "expansion":word_key, "specificity":specificity, "ambiguity":ambiguity, "pos":pos}
+          
+            ## Put together our Cassandra write query
+            query = self.get_write_query(etype)
+            ## word_key is the expansion term
+            values = self.get_write_bind_variables(terms,word_key,specificity,ambiguity,pos)
             for i in range(20):
                 ## The Database might time out, if so back off and try again
                 try:
@@ -197,28 +324,30 @@ class Expander():
             
 
     def top_index_expand(self,term,count):
-	## Use the cassandra database to get the Google Corpus terms
-	## as opposed to the SQL server database
-	return self.top_index_expand_cassandra(term,count)
+        ## Use the cassandra database to get the Google Corpus terms
+        ## as opposed to the SQL server database
+        return self.top_index_expand_cassandra(term,count)
 
     def top_index_expand_cassandra(self,term,count):
         """ Method which expands the query using the Google Web Corpus parsed and stored
             in a Cassandra database
         """
         print "Corpus Expanding %s" % term
-        terms = term.split()
-        ## We are only set up to do expansions on 3-gram searches ... so check for this
-        if not len(terms) == 3:
-            raise NotThreeGram()
+
+        ## This will throw "WrongGramSize" if the search query we are 
+        ## being passed is the wrong size
+        self.verify_search_length(term)
+        terms = self.term_to_list(term)
+
         expansion_terms=[]
         good_queries=[]
-	query = """
-	select gramfour, frequency from fourgm.fourgram_lower where gramone = :gramone and gramtwo = :gramtwo and gramthree = :gramthree
-        """
-	for i in range(20):
+        query = self.get_cassandra_expansion_query()
+        bind_vars = self.get_cassandra_bind_variables(terms)
+
+        for i in range(20):
             ## The Database might time out, if so back off and try again
             try:
-                self.cursor.execute(query, {"gramone":terms[0], "gramtwo":terms[1], "gramthree":terms[2]})
+                self.cursor.execute(query, bind_vars)
             except cql.apivalues.OperationalError:
                 print "Timeout, backoff and retry"
                 time.sleep(20)
@@ -240,9 +369,9 @@ class Expander():
             sorted_terms.append(w)
         
         for i in range(len(sorted_terms)):
-	    if i > count:
+            if i > count:
                 ## We are just interested in the top ${count} changes
-		break
+                break
             try:
                 ##result=str(results[i][0])
                 result = sorted_terms[i]
@@ -269,25 +398,22 @@ class Expander():
                 try:
                     s=self.search_expand(q)
                     time.sleep(2)
-		    break ## got a result, we are done
+                    break ## got a result, we are done
                 except xml.parsers.expat.ExpatError:
                     print "Error returned from Google ... retrying"
-		    if i >= 4:
-	                ## Ok, of Google bombs out four times then
-			## re-throw the exception, this will kill the
-		        ## program
-		        raise
+                    if i >= 4:
+                        ## Ok, of Google bombs out four times then
+                        ## re-throw the exception, this will kill the
+                        ## program
+                        raise
                     time.sleep(20)
                     continue
             ## We didn't get anything, go to the next term
             if not s:
                 continue
 
-            try:
-                for res in s:
-                    expansion_terms.append(res)
-            except:
-                pass
+            for res in s:
+                expansion_terms.append(res)
         return self.insert_data(expansion_terms,term,"top")
 
     def top_index_expand_sql(self,term,count):
@@ -300,8 +426,8 @@ class Expander():
                             % (term+'%'))
         results=self.cursor.fetchall()
         for i in range(len(results)):
-	    if i > count:
-		## We are just interested in the top ${count} results
+            if i > count:
+            ## We are just interested in the top ${count} results
                 break
             try:
                 result=str(results[i][0])
@@ -360,14 +486,10 @@ class Expander():
         self.connection is for NGram Corpus on Cassandra
         self.connection2 is for UMLS on SQLServer 2008
         """
-        ##self.connection = pyodbc.connect('DRIVER={SQL Server};Trusted_Connection=yes;SERVER=WIN-20IR78KE8UV\SQLSERVER2012;DATABASE=GoogleCorpus;UID=XXXXXXXXXX')
-        ##self.cursor = self.connection.cursor()
-        ## This is the cassandra database with the 4-gram Google Web Corpus
-        
         self.connection = cql.connect('127.0.0.1', 9160, "fourgm", cql_version = '3.0.0')
         self.cursor = self.connection.cursor()
 
-        self.connection2 = pyodbc.connect('DRIVER={SQL Server};SERVER=134.173.236.21;DATABASE=XXXXXX;UID=XXXXXXX;PWD=XXXXXXXX')
+        self.connection2 = pyodbc.connect('DRIVER={SQL Server};SERVER=XXX.XXX.XXX.XXX;DATABASE=umlsSmall;UID=XXXXXX;PWD=XXXXXXXXX')
         self.cursor2=self.connection2.cursor()
 
     def write_to_file(self,filename,data):
@@ -379,7 +501,7 @@ class Expander():
         writer=csv.writer(opened)
         for dictionary in data:
             for word_key in dictionary.keys():
-                row=[word_key,dictionary[word_key]['type'],dictionary[word_key]['amb'],dictionary[word_key]['spe'],dictionary[word_key]['term']]
+                row=[word_key.encode('utf-8'),dictionary[word_key]['type'],dictionary[word_key]['amb'],dictionary[word_key]['spe'],dictionary[word_key]['term']]
                 writer.writerow(row)
         opened.close()
 
@@ -410,15 +532,21 @@ def main():
     ## The first argument is the directory with the data file. This allows the program
     ## to be run easily on multiple data sets simultaneously.
     datadirectory = sys.argv[1]
+    number_of_grams = int(sys.argv[2])
+
+    if not number_of_grams:
+        sys.exit("You must tell the program the number of grams it should expand.")
+        
     print "Data Directory %s" % datadirectory
     data=[]
-    newfile="./%s/new_200k.csv" % datadirectory # File to be written to
-    filename="./%s/sampled3_continue.txt" % datadirectory # File to be read
+    newfile="./%s/sampled2_test_results.csv" % datadirectory # File to be written to
+    filename="./%s/sampled2_test" % datadirectory # File to be read
     print "begin"
-    expander=Expander(filename)
+    expander=Expander(filename,number_of_grams)
     expander.connect()
     c=0
     l=len(expander.terms)
+    print "Processing %s terms" % l
     for term in expander.terms: 
         c+=1
         print "%d / %d" % (c,l)
@@ -431,11 +559,11 @@ def main():
                     print "Processing Result %s" % dic
                     data.append(dic)
                     expander.write_results_to_cassandra(dic)
-        except NotThreeGram:
-            ## expander will throw a NotThreeGram exception if it is asked to
+        except WrongGramSize():
+            ## expander will throw a WrongGramSize exception if it is asked to
             ## parse a search that does not contain exactly three grams.
             ## Catch that error, note it, then continue.
-            print "%s doesn't appear to be a three gram search" % term
+            print "%s doesn't appear to be the proper length search" % term
         except:
             ## Print out the problem term to aid troubleshooting
             print "Unable to Cassandra expand term %s" % term
