@@ -1,0 +1,378 @@
+cqlsh:fourgm> describe schema
+
+CREATE KEYSPACE fourgm WITH replication = {
+  'class': 'SimpleStrategy',
+  'replication_factor': '1'
+};
+
+USE fourgm;
+
+CREATE TABLE fourgram (
+  gramone text,
+  gramtwo text,
+  gramthree text,
+  gramfour text,
+  frequency counter,
+  PRIMARY KEY (gramone, gramtwo, gramthree, gramfour)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE fourgram_corpus_expansion (
+  gramone text,
+  gramtwo text,
+  gramthree text,
+  expansion text,
+  ambiguity int,
+  pos text,
+  query_ambiguity int,
+  query_specificity int,
+  specificity int,
+  PRIMARY KEY (gramone, gramtwo, gramthree, expansion)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE fourgram_files (
+  fileid text,
+  lines int,
+  records int,
+  PRIMARY KEY (fileid)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE fourgram_files_test (
+  fileid text,
+  lines int,
+  records int,
+  PRIMARY KEY (fileid)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE fourgram_lower (
+  gramone text,
+  gramtwo text,
+  gramthree text,
+  gramfour text,
+  frequency counter,
+  PRIMARY KEY (gramone, gramtwo, gramthree, gramfour)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE fourgram_lower_test (
+  gramone text,
+  gramtwo text,
+  gramthree text,
+  gramfour text,
+  frequency counter,
+  PRIMARY KEY (gramone, gramtwo, gramthree, gramfour)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE fourgram_search_expansion (
+  gramone text,
+  gramtwo text,
+  gramthree text,
+  expansion text,
+  ambiguity int,
+  pos text,
+  query_ambiguity int,
+  query_specificity int,
+  specificity int,
+  PRIMARY KEY (gramone, gramtwo, gramthree, expansion)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE fourgram_test (
+  gramone text,
+  gramtwo text,
+  gramthree text,
+  gramfour text,
+  frequency counter,
+  PRIMARY KEY (gramone, gramtwo, gramthree, gramfour)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE threegram (
+  gramone text,
+  gramtwo text,
+  gramthree text,
+  frequency counter,
+  PRIMARY KEY (gramone, gramtwo, gramthree)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE threegram_corpus_expansion (
+  gramone text,
+  gramtwo text,
+  expansion text,
+  ambiguity int,
+  pos text,
+  query_ambiguity int,
+  query_specificity int,
+  specificity int,
+  PRIMARY KEY (gramone, gramtwo, expansion)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE threegram_files (
+  fileid text,
+  lines int,
+  records int,
+  PRIMARY KEY (fileid)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE threegram_files_test (
+  fileid text,
+  lines int,
+  records int,
+  PRIMARY KEY (fileid)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE threegram_lower (
+  gramone text,
+  gramtwo text,
+  gramthree text,
+  frequency counter,
+  PRIMARY KEY (gramone, gramtwo, gramthree)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE threegram_lower_test (
+  gramone text,
+  gramtwo text,
+  gramthree text,
+  frequency counter,
+  PRIMARY KEY (gramone, gramtwo, gramthree)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE threegram_search_expansion (
+  gramone text,
+  gramtwo text,
+  expansion text,
+  ambiguity int,
+  pos text,
+  query_ambiguity int,
+  query_specificity int,
+  specificity int,
+  PRIMARY KEY (gramone, gramtwo, expansion)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
+
+CREATE TABLE threegram_test (
+  gramone text,
+  gramtwo text,
+  gramthree text,
+  frequency counter,
+  PRIMARY KEY (gramone, gramtwo, gramthree)
+) WITH
+  bloom_filter_fp_chance=0.010000 AND
+  caching='ALL' AND
+  comment='' AND
+  dclocal_read_repair_chance=0.000000 AND
+  gc_grace_seconds=864000 AND
+  index_interval=128 AND
+  read_repair_chance=0.100000 AND
+  replicate_on_write='true' AND
+  populate_io_cache_on_flush='false' AND
+  default_time_to_live=0 AND
+  speculative_retry='NONE' AND
+  memtable_flush_period_in_ms=0 AND
+  compaction={'class': 'SizeTieredCompactionStrategy'} AND
+  compression={'sstable_compression': 'LZ4Compressor'};
