@@ -1,0 +1,140 @@
+This is the basic procedure used to run the experiments. 
+
+Step 1a - Create query list
+  You need to filter the AOL 500K User Tracking search corpus to include
+  only those queries that are the number of grams that you are interested in
+  Tools:
+    'extract_2gm_from_aol.py'
+      As the name suggests modify the source code for the number of grams you are
+      trying to extract.
+    '2gm_aol_counter.py' and '3gm_aol_counter.py'
+      These programs will read a given AOL search file and report on
+      how many of the queries within are exactly X grams long.
+
+Step 1b - Load Google Web Corpus into Cassandra
+  Filter and load the Google Web corpus into Cassandra
+  You will need to create the cassandra schema first.
+  Tools:
+    '4gm_loader.groovy' and '3gm_loader.groovy' are
+      multi-threaded Groovy/JDK programs that filter
+      and load the web corpus into the Cassandra database
+    'cassandra_schema.txt'
+      A sample schema that can be used for three and four 
+      gram expansions.
+
+Step 2 - Expand the queries using Social and Content based methods
+  In this step you use the contents of the Google Web Corpus and 
+  the Google Autocomplete API to expand the queries. This step can 
+  take several days. I generally divide the files into multiple
+  sections and run the tools concurrently on each section.
+  Tools:
+    'expander.py'
+      This program uses the Google API and the Web Corpus in Cassandra
+      to expand each query, the results are written back into Cassandra.
+      The program is written to work with bi-gram and tri-gram queries 
+      and it should be reasonably easy to extend to other lengths.
+        * Input - AOL query list as text file
+        * Output - Expansions written to the Cassandra Database
+    'expander_find_last_processed.py'
+      If the expander.py program get interrupted in an unexpected way
+      you can use this program to figure out where it left off so that
+      you can continue from the same spot instead of starting over.
+    'test_expander.py'
+      The expander is a relatively complex program. Use this test harness 
+      to validate changes and ensure that the program is working as expected.
+      The test harness expects a certain schema in Cassandra (see step 1) and
+      needs a live database connection to run tests.
+
+Step 3 - Get Specificity and Ambiguity from Wordnet and Write to CSV
+  This step extracts the expansions from Cassandra and writes them
+  to a CSV file. Basically Cassandra is good at storing and matching
+  data, but, primarily because of limitations to the schema, it is not
+  great at batch operations. The CSV file tends to work better and it 
+  is easily manipulatable with Python.
+  Tools:
+    'write_to_file_2gm.py' and 'write_to_file_3gm.py'
+      These programs extract the data from Cassandra, calculate the 
+      ambiguity and specificity of the expansion term from Wordnet
+      and then write the entire result to a CSV file.
+        * Input - Expansions in Cassandra Database 
+        * Output - 'sampled_text_Xgm_prefilter.csv'
+    'analyze.py' and 'calculate_expansion_stats.py'
+      Handy to show the statistics on the generated files, note these
+      tools are capable of doing a certain amount of filtering themselves
+      so you will get statistics on what will happen to the file 
+      after certain filters are applied.
+
+Step 4 - Filter the Results
+  The previous step delivers a CSV with all expansions, including 
+  conjunctions, prepositions and punctuation. The next step is to
+  filter out all of those undesirables leaving a clean file that 
+  can be randomly sampled.
+  Tools:
+    'filter_sample_file.py'
+      This takes the raw CSV file, removes the undesirable expanions,
+      and then writes the results to a new CSV file.
+        * Input - 'sampled_text_Xgm_prefilter.csv'
+        * Output - 'sampled_text_Xgm_postfilter.csv'
+    'analyze.py' and 'calculate_expansion_stats.py'
+      Handy to show the statistics on the generated files, note these
+      tools are capable of doing a certain amount of filtering themselves
+      so you will get statistics on what will happen to the file 
+      after certain filters are applied.
+
+
+Step 5 - Create Random Sample
+  You will need to take a 1% sample of the resulting expansions to
+  run the Google Search against.
+  Tools:
+    'collect_random_sample.py'
+      This program reads the filtered CSV file and writes another CSV 
+      file consisting of a random sample of the filtered CSV file. You
+      will need to 'manually' figure out how many sample are in the 
+      filtered file, calculate the size of your desired sample, and then 
+      write that information into the definitions of corpus_rnum_list and 
+      and search_rnum_list in main() ... sorry. To get the numbers you 
+      need for the calculation the below tools are helpful.
+        * Input - 'sampled_text_Xgm_postfilter.csv'
+        * Output - 'random_corpus_sample_Xgm.csv' 'random_search_sample_Xgm.csv'
+    'analyze.py' and 'calculate_expansion_stats.py'
+      Handy to show the statistics on the generated files, note these
+      tools are capable of doing a certain amount of filtering themselves
+      so you will get statistics on what will happen to the file 
+      after certain filters are applied.
+
+Step 6 - Submit Expansions to Google and Retrieve Search Results
+  In this step you submit your random selection of search results to Google. Google
+  will return a JSON file which the program then writes to disk for further analysis.
+  This step uses a depreciated API that has a very low quota so this step can take 
+  a very long time. The sustainable rate is about 35 seconds per expansion.
+  Tools:
+    'get_google_results.py'
+      The program which submits the search request and saves the result. It is fairly
+      intelligent about receiving "over quota" messages and backing off.
+        * Input - 'random_corpus_sample_Xgm.csv'
+        * Output - A series of JSON file named with the expansion type ('s' or 'c') 
+                   followed by the query number. These are written into a 'results'
+                   directory. If that directory doesn't exist the program will error
+                   out.
+    'find_gaps_in_expansion_results.py'
+      A very simple little tool that can read the results directory and tell you what files
+      are missing ... if you tell it what should be there.
+
+Step 7 - Compute the statistics from the Google Search results
+  In this step you look through all of the JSON files generated by step 6 and calculate 
+  various measures. This includes the average ambiguity and specificity of the page 
+  descriptions as included by Google, the number and percentage of unique domains and
+  t-tests and Cohen's D effect measure.
+  Tools:
+    'analyze_google_results.py'
+      * Input - results directory of JSON files from Step 6
+      * Output- Statistics
+    'find_gaps_in_expansion_results.py'
+      A very simple little tool that can read the results directory and tell you what files
+      are missing ... if you tell it what should be there.
+
+NOT IN REPOSITORY YET
+
+expander/all_query_data contains 'analyze.py', 'filter_statistics.py' and 'test_analyze.py' which
+are in progress attempts to do more detailed analysis on the query expansion and resulting Google
+Search results. They are a work in progress.
